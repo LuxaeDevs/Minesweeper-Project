@@ -21,7 +21,6 @@ enum Condition
     IDLE,
     CLICKED,
     MINE,
-    FLAGGED
 };
 struct Settings
 {
@@ -36,6 +35,7 @@ struct Settings
         Color fieldColor = WHITE;
         Color mineColor = RED;
     };
+    bool playing = true;
     BoardInfo board;
     struct Screen
     {
@@ -76,18 +76,24 @@ struct RecObject : Coordinate
     }
 };
 template <typename T>
+void SetOffMine(Settings &game, vector<vector<T>> &mineField);
+template <typename T>
 void ClickCascade(vector<vector<T>> &mineField, T &field, Settings &game);
-bool CheckIfClick(Vector2 mousePos, Vector2 position, Vector2 size);
-struct Field : Coordinate
+bool CheckIfClick(Vector2 mousePos, Vector2 position, Vector2 size, MouseButton mousePress);
+struct Field : RecObject
 {
 
-    Condition condition;
+    Condition condition = IDLE;
+    Vector2 gridPosition;
+
+    bool flagged = false;
     int mineNearby = 0;
-    Field(Vector2 position, Color screenColor, Condition condition) : Coordinate(position, screenColor)
+    Field(Rectangle screenRec, Vector2 gridPosition, Color screenColor) : RecObject(screenRec, screenColor)
     {
         this->condition = condition;
+        this->gridPosition = gridPosition;
     }
-    Field() : Coordinate()
+    Field() : RecObject()
     {
     }
     void SetMine(Settings &game)
@@ -96,27 +102,45 @@ struct Field : Coordinate
         screenColor = game.board.mineColor;
     }
 
-    void OnMouseClick()
+    void FieldFunction(Settings &game, Vector2 mousePos, vector<vector<Field>> &mineField)
     {
-    }
-    Rectangle RecScreenSize(Settings &game)
-    {
-        return {game.board.start.x + (position.x * game.board.fieldRatio), game.board.start.y + (position.y * game.board.fieldRatio), (game.board.fieldRatio), (game.board.fieldRatio)};
+        if (!game.playing)
+            return;
+        Rectangle check = GetRectangleData();
+        Vector2 appPos = {check.x, check.y};
+        Vector2 frameSize = {check.width, check.height};
+        if (CheckIfClick(mousePos, appPos, frameSize, MOUSE_BUTTON_RIGHT) && condition != CLICKED)
+        {
+            flagged = !flagged;
+        }
+        if (CheckIfClick(mousePos, appPos, frameSize, MOUSE_BUTTON_LEFT))
+        {
+            if (condition != MINE)
+            {
+                ClickCascade<Field>(mineField, *this, game);
+                return;
+            }
+            game.playing = false;
+            SetOffMine<Field>(game, mineField);
+        }
     }
     void DrawField(Settings &game, Color outline, Vector2 mousePos, vector<vector<Field>> &mineField)
     {
-        Rectangle check = RecScreenSize(game);
+        Rectangle check = GetRectangleData();
         Vector2 appPos = {check.x, check.y};
         Vector2 frameSize = {check.width, check.height};
         Vector2 size = {frameSize.x - frameSize.x / 10, frameSize.y - frameSize.y / 10};
-        if (CheckIfClick(mousePos, appPos, size))
-            ClickCascade<Field>(mineField, *this, game);
         DrawRectangleV(appPos, frameSize, outline);
         DrawRectangleV(appPos, size, screenColor);
-        if (mineNearby == 0 || condition != CLICKED)
-            return;
-        DrawText(std::to_string(mineNearby).c_str(), appPos.x + MeasureText(std::to_string(mineNearby).c_str(), size.y) / 2,
-                 appPos.y, size.y, BLACK);
+        if (mineNearby > 0 && condition == CLICKED)
+        {
+            DrawText(std::to_string(mineNearby).c_str(), appPos.x + MeasureText(std::to_string(mineNearby).c_str(), size.y) / 2,
+                     appPos.y, size.y, BLACK);
+        }
+        if (flagged)
+        {
+            DrawCircleV({appPos.x + size.x / 2, appPos.y + size.y / 2}, size.y / 5.0f, YELLOW);
+        }
     }
 };
 void SetField(vector<vector<Field>> &mineField, Settings &game);
@@ -145,5 +169,6 @@ struct Button : RecObject
         if (!ButtonCentered())
             return;
         SetField(mineField, game);
+        game.playing = true;
     }
 };
