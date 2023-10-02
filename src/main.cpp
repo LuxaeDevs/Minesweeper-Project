@@ -15,6 +15,7 @@ int main()
         ClearBackground(BLACK);
         switch (game.atScreen)
         {
+            cout << "uwu";
         case GAME:
             DrawFields(mineField, game, GetMousePosition());
             resetButton.ResetGame(mineField, game);
